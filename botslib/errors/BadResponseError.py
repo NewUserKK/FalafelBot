@@ -1,0 +1,2 @@
+class BadResponseError(BaseException):
+    pass
