@@ -49,7 +49,7 @@ class FalafelBot(BotHandler):
         Starts a main endless loop for the bot.
 
         At each iteration gets list of updates from Telegram API and respond for every request
-        Currently supports text messages and some stickers (untested yet)
+        Currently supports text messages and some stickers (untested yet due to the best laws of our country)
         """
         while True:
             try:
@@ -77,6 +77,110 @@ class FalafelBot(BotHandler):
                     self.send_message(update.chat_id, "Use /help")
 
                 self._inc_offset()
+
+    def on_text(self, update: Update) -> None:
+        """
+        Responds to text message sent by user
+
+        :param update: current update object
+        """
+
+        def get_default_message() -> str:
+            default_messages = ["Не внятно!",
+                                "Не содержательно!",
+                                "Эту реплику из зала я отвергну как неорганизованную!"]
+            return (default_messages[randint(0, len(default_messages) - 1)] +
+                    " Используйте /help")
+
+        msg_parse_mode = None
+        query = get_message_text(update.message_json)
+
+        if query == "/help" or query == "/start":
+            self.out_message = self.get_help_message()
+
+        elif query == "/reg":
+            self._on_registration(update)
+
+        elif query == "/leave":
+            self._on_leave(update)
+
+        elif query == "/list":
+            if self._on_list_query():
+                msg_parse_mode = "Markdown"
+
+        elif query == "/roll":
+            self._on_roll(update)
+
+        elif query == "/motivate":
+            # TODO: self._on_motivate()
+            self.out_message = get_default_message()
+
+        elif query.startswith("/logs"):
+            lines = self.parse_args(query)
+            self.out_message = self.get_log(lines)
+
+        else:
+            self.out_message = get_default_message()
+
+        self.send_message(update.chat_id, self.out_message, msg_parse_mode)
+
+    def _on_registration(self, update: Update) -> None:
+        if update.user_id not in self.session_users_db:
+            self.register_user(update.user)
+            self.out_message = "Registered!"
+        else:
+            self.out_message = "Already registered!"
+
+    def register_user(self, user: dict) -> None:
+        """
+        Registers user as participant of roll and adds him to databases
+        If user already registered, does nothing
+
+        :param user: json-like dict object representing user
+        """
+        user_id = get_user_id(user)
+        if user_id in self.session_users_db:
+            return
+
+        if user_id not in self.overall_users_db:
+            self.overall_users_db[user_id] = get_user_name(user)
+
+        self.session_users_db[user_id] = self.overall_users_db[user_id]
+
+    def _on_leave(self, update: Update) -> None:
+        if update.user_id in self.session_users_db:
+            self.session_users_db.pop(update.user_id)
+            self.out_message = "Goodbye!"
+        else:
+            self.out_message = "You can't leave if you didn't register!"
+
+    def _on_list_query(self) -> bool:
+        # returns false if user list is empty
+        if not self.session_users_db:
+            self.out_message = "No one is eating shaverma today :("
+            return False
+        else:
+            self.out_message = ("*List of users:*\n\n" +
+                                "\n".join(self.session_users_db.values()))
+            return True
+
+    def _on_roll(self, update: Update) -> None:
+        self.out_message = "{} has started a roll!\n\n".format(update.user_name)
+
+        if update.user_id not in self.session_users_db:
+            self.send_message(update.user_id, "Autoregistered!")
+            self.register_user(update.user)
+
+        self.log_write("Rolling for: " + str(self.session_users_db))
+
+        lucky_index = randint(0, len(self.session_users_db) - 1)
+        lucky_guy = list(self.session_users_db.keys())[lucky_index]
+        self.out_message += "Sorry, you lose, {}".format(self.session_users_db[lucky_guy])
+
+    # Not working yet, bd is broken
+    def _on_motivate(self) -> None:
+        note_num = str(randint(1, len(self.motivation_notes_db)))
+        self.out_message = note_num + ". " + self.motivation_notes_db[note_num]
 
     def on_sticker(self, update: Update) -> None:
         """
@@ -160,110 +264,6 @@ class FalafelBot(BotHandler):
 
         self.open_log('a')
         return last_messages
-
-    def register_user(self, user: dict) -> None:
-        """
-        Registers user as participant of roll and adds him to databases
-        If user already registered, does nothing
-
-        :param user: json-like dict object representing user
-        """
-        user_id = get_user_id(user)
-        if user_id in self.session_users_db:
-            return
-
-        if user_id not in self.overall_users_db:
-            self.overall_users_db[user_id] = get_user_name(user)
-
-        self.session_users_db[user_id] = self.overall_users_db[user_id]
-
-    def _on_registration(self, update: Update) -> None:
-        if update.user_id not in self.session_users_db:
-            self.register_user(update.user)
-            self.out_message = "Registered!"
-        else:
-            self.out_message = "Already registered!"
-
-    def _on_leave(self, update: Update) -> None:
-        if update.user_id in self.session_users_db:
-            self.session_users_db.pop(update.user_id)
-            self.out_message = "Goodbye!"
-        else:
-            self.out_message = "You can't leave if you didn't register!"
-
-    def _on_list_query(self) -> bool:
-        # returns false if user list is empty
-        if not self.session_users_db:
-            self.out_message = "No one is eating shaverma today :("
-            return False
-        else:
-            self.out_message = ("*List of users:*\n\n" +
-                                "\n".join(self.session_users_db.values()))
-            return True
-
-    def _on_roll(self, update: Update) -> None:
-        self.out_message = "{} has started a roll!\n\n".format(update.user_name)
-
-        if update.user_id not in self.session_users_db:
-            self.send_message(update.user_id, "Autoregistered!")
-            self.register_user(update.user)
-
-        self.log_write("Rolling for: " + str(self.session_users_db))
-
-        lucky_index = randint(0, len(self.session_users_db) - 1)
-        lucky_guy = list(self.session_users_db.keys())[lucky_index]
-        self.out_message += "Sorry, you lose, {}".format(self.session_users_db[lucky_guy])
-
-    # Not working yet, bd is broken
-    def _on_motivate(self) -> None:
-        note_num = str(randint(1, len(self.motivation_notes_db)))
-        self.out_message = note_num + ". " + self.motivation_notes_db[note_num]
-
-    def on_text(self, update: Update) -> None:
-        """
-        Responds to text message sent by user
-
-        :param update: current update object
-        """
-
-        def get_default_message() -> str:
-            default_messages = ["Не внятно!",
-                                "Не содержательно!",
-                                "Эту реплику из зала я отвергну как неорганизованную!"]
-            return (default_messages[randint(0, len(default_messages) - 1)] +
-                    " Используйте /help")
-
-        msg_parse_mode = None
-        query = get_message_text(update.message_json)
-
-        if query == "/help" or query == "/start":
-            self.out_message = self.get_help_message()
-
-        elif query == "/reg":
-            self._on_registration(update)
-
-        elif query == "/leave":
-            self._on_leave(update)
-
-        elif query == "/list":
-            if self._on_list_query():
-                msg_parse_mode = "Markdown"
-
-        elif query == "/roll":
-            self._on_roll(update)
-
-        elif query == "/motivate":
-            # TODO: self._on_motivate()
-            self.out_message = get_default_message()
-
-        elif query.startswith("/logs"):
-            lines = self.parse_args(query)
-            self.out_message = self.get_log(lines)
-
-        else:
-            self.out_message = get_default_message()
-
-        self.send_message(update.chat_id, self.out_message, msg_parse_mode)
 
     def close_db(self) -> None:
         """ Closes all opened logs and databases """
