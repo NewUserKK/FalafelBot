@@ -1,3 +1,5 @@
 queuebot.log
 users_db.shb
-*/__pycache__
+*/__pycache__/
+*/*/__pycache__/
+
