@@ -2,7 +2,15 @@ from botslib.UpdateJsonParser import *
 
 
 class Update:
+    """
+    Wrap for update json
+    """
     def __init__(self, update_json: dict):
+        """
+        Extracts data from update json
+
+        :param update_json: json representing update
+        """
         self.chat_id = get_chat_id(update_json)
 
         self.user = get_user(update_json)

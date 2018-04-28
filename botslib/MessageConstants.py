@@ -1,3 +1,7 @@
+"""
+Module contains constants representing message types
+that could be sent by users according to Telegram API
+"""
 TEXT = 0
 AUDIO = 1
 DOCUMENT = 2
